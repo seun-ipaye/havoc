@@ -1,0 +1,15 @@
+{
+  "name": "havoc",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Havoc: a statically-typed, compiled language for competitive programming",
+  "scripts": {
+    "build": "tsc",
+    "demo": "ts-node src/demo.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
+  }
+}
