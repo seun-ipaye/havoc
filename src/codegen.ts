@@ -21,6 +21,19 @@ function cType(type: Type): string {
   }
 }
 
+function zeroValue(type: Type): string {
+  switch (type) {
+    case "int":
+      return "0LL";
+    case "bool":
+      return "false";
+    case "int[]":
+      return "{0}";
+    case "void":
+      throw new Error("codegen: void cannot be a variable's type");
+  }
+}
+
 class CodeGenerator {
   private forCounter = 0;
 
@@ -47,7 +60,12 @@ class CodeGenerator {
     this.collectDeclarations(stmts, vars);
     let out = "";
     for (const [name, type] of vars) {
-      out += `${INDENT}${cType(type)} h_${name};\n`;
+      // Zero-initialized: the type-checker doesn't yet do definite-assignment
+      // analysis (a variable set in only one `if`/`else` branch, or inside a
+      // loop that might run zero times, still type-checks). Zero-init turns
+      // "reads uninitialized stack memory" into "reads a defined but possibly
+      // wrong 0" — not correct Havoc semantics, but not undefined behavior.
+      out += `${INDENT}${cType(type)} h_${name} = ${zeroValue(type)};\n`;
     }
     return out;
   }
@@ -66,8 +84,14 @@ class CodeGenerator {
           }
           this.collectDeclarations(stmt.body, vars);
           break;
+        case "While":
+          this.collectDeclarations(stmt.body, vars);
+          break;
         case "If":
           this.collectDeclarations(stmt.body, vars);
+          if (stmt.elseBody) {
+            this.collectDeclarations(stmt.elseBody, vars);
+          }
           break;
         case "ExprStmt":
           break;
@@ -84,9 +108,20 @@ class CodeGenerator {
       case "Assign":
         return `${indent}h_${stmt.name} = ${this.emitExpr(stmt.value)};\n`;
 
-      case "If":
-        return (
+      case "If": {
+        let out =
           `${indent}if (${this.emitExpr(stmt.condition)}) {\n` +
+          this.emitStatements(stmt.body, indent + INDENT) +
+          `${indent}}`;
+        if (stmt.elseBody) {
+          out += ` else {\n` + this.emitStatements(stmt.elseBody, indent + INDENT) + `${indent}}`;
+        }
+        return out + "\n";
+      }
+
+      case "While":
+        return (
+          `${indent}while (${this.emitExpr(stmt.condition)}) {\n` +
           this.emitStatements(stmt.body, indent + INDENT) +
           `${indent}}\n`
         );
@@ -121,6 +156,9 @@ class CodeGenerator {
 
       case "Identifier":
         return `h_${expr.name}`;
+
+      case "UnaryExpr":
+        return `(${expr.op}${this.emitExpr(expr.operand)})`;
 
       case "BinaryExpr":
         // Havoc's operator lexemes (+ - * / % == != < <= > >=) are all

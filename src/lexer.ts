@@ -2,6 +2,8 @@ export type TokenType =
   | "NUMBER"
   | "IDENTIFIER"
   | "IF"
+  | "ELSE"
+  | "WHILE"
   | "FOR"
   | "IN"
   | "PLUS"
@@ -33,6 +35,8 @@ export interface Token {
 
 const KEYWORDS: Record<string, TokenType> = {
   if: "IF",
+  else: "ELSE",
+  while: "WHILE",
   for: "FOR",
   in: "IN",
 };

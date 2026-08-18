@@ -45,6 +45,19 @@ class TypeChecker {
           );
         }
         for (const inner of stmt.body) this.checkStmt(inner);
+        if (stmt.elseBody) {
+          for (const inner of stmt.elseBody) this.checkStmt(inner);
+        }
+        return;
+      }
+      case "While": {
+        const conditionType = this.checkExpr(stmt.condition);
+        if (conditionType !== "bool") {
+          throw new TypeCheckError(
+            `while condition must be bool, got ${conditionType} at line ${stmt.line}`
+          );
+        }
+        for (const inner of stmt.body) this.checkStmt(inner);
         return;
       }
       case "For": {
@@ -94,6 +107,17 @@ class TypeChecker {
         }
         expr.type = type;
         return type;
+      }
+
+      case "UnaryExpr": {
+        const operandType = this.checkExpr(expr.operand);
+        if (operandType !== "int") {
+          throw new TypeCheckError(
+            `unary '${expr.op}' requires an int operand, got ${operandType} at line ${expr.line}`
+          );
+        }
+        expr.type = "int";
+        return expr.type;
       }
 
       case "BinaryExpr": {

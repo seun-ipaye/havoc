@@ -80,6 +80,9 @@ class Parser {
     if (this.check("IF")) {
       return this.parseIf();
     }
+    if (this.check("WHILE")) {
+      return this.parseWhile();
+    }
     if (this.check("FOR")) {
       return this.parseFor();
     }
@@ -94,7 +97,20 @@ class Parser {
     const line = this.expect("IF", "Expected 'if'").line;
     const condition = this.parseExpr();
     const body = this.parseBlock();
-    return { kind: "If", condition, body, line };
+    if (!this.match("ELSE")) {
+      return { kind: "If", condition, body, line };
+    }
+    // `else if` is just an else-block containing one more If statement —
+    // no separate `elif` keyword needed.
+    const elseBody = this.check("IF") ? [this.parseIf()] : this.parseBlock();
+    return { kind: "If", condition, body, elseBody, line };
+  }
+
+  private parseWhile(): Stmt {
+    const line = this.expect("WHILE", "Expected 'while'").line;
+    const condition = this.parseExpr();
+    const body = this.parseBlock();
+    return { kind: "While", condition, body, line };
   }
 
   private parseFor(): Stmt {
@@ -138,13 +154,22 @@ class Parser {
   }
 
   private parseMultiplicative(): Expr {
-    let left = this.parsePostfix();
+    let left = this.parseUnary();
     while (MULTIPLICATIVE_OPS.includes(this.peek().type)) {
       const opToken = this.advance();
-      const right = this.parsePostfix();
+      const right = this.parseUnary();
       left = { kind: "BinaryExpr", op: opToken.value, left, right, line: opToken.line };
     }
     return left;
+  }
+
+  private parseUnary(): Expr {
+    if (this.check("MINUS")) {
+      const opToken = this.advance();
+      const operand = this.parseUnary();
+      return { kind: "UnaryExpr", op: opToken.value, operand, line: opToken.line };
+    }
+    return this.parsePostfix();
   }
 
   private parsePostfix(): Expr {
