@@ -6,6 +6,10 @@ export type TokenType =
   | "WHILE"
   | "FOR"
   | "IN"
+  | "FUNC"
+  | "RETURN"
+  | "TRUE"
+  | "FALSE"
   | "PLUS"
   | "MINUS"
   | "STAR"
@@ -24,6 +28,9 @@ export type TokenType =
   | "RBRACE"
   | "LBRACKET"
   | "RBRACKET"
+  | "COLON"
+  | "COMMA"
+  | "ARROW"
   | "NEWLINE"
   | "EOF";
 
@@ -39,6 +46,10 @@ const KEYWORDS: Record<string, TokenType> = {
   while: "WHILE",
   for: "FOR",
   in: "IN",
+  func: "FUNC",
+  return: "RETURN",
+  true: "TRUE",
+  false: "FALSE",
 };
 
 const TWO_CHAR_OPERATORS: Record<string, TokenType> = {
@@ -46,6 +57,7 @@ const TWO_CHAR_OPERATORS: Record<string, TokenType> = {
   "!=": "NEQ",
   "<=": "LTE",
   ">=": "GTE",
+  "->": "ARROW",
 };
 
 const ONE_CHAR_OPERATORS: Record<string, TokenType> = {
@@ -63,6 +75,8 @@ const ONE_CHAR_OPERATORS: Record<string, TokenType> = {
   "}": "RBRACE",
   "[": "LBRACKET",
   "]": "RBRACKET",
+  ":": "COLON",
+  ",": "COMMA",
 };
 
 function isDigit(ch: string): boolean {

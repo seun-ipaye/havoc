@@ -39,13 +39,19 @@ typedef struct {
     int64_t length;
 } HavocIntArray;
 
-static int64_t havoc_index(HavocIntArray arr, int64_t i) {
+// Both reads and writes go through this one bounds check, so there's no
+// risk of the write path ever having a different (or missing) check.
+static int64_t* havoc_index_ptr(HavocIntArray arr, int64_t i) {
     if (i < 0 || i >= arr.length) {
         fprintf(stderr, "runtime error: index %lld out of bounds for array of length %lld\\n",
                 (long long)i, (long long)arr.length);
         exit(1);
     }
-    return arr.data[i];
+    return &arr.data[i];
+}
+
+static int64_t havoc_index(HavocIntArray arr, int64_t i) {
+    return *havoc_index_ptr(arr, i);
 }
 
 // Reads off one shared whitespace-delimited token stream over all of

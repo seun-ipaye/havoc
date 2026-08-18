@@ -1,10 +1,16 @@
-import { Expr, Program, Stmt, Type } from "./ast";
+import { Expr, FunctionDef, Item, Program, Stmt, Type } from "./ast";
 import { RUNTIME_PRELUDE } from "./runtime";
 
 // Part 4: transpile the typed AST straight to C. Static types map to
 // unboxed C types (int64_t, bool, a data+length struct) with no boxing or
 // dynamic dispatch, and the typed AST from Part 3 is consumed directly —
 // codegen never re-derives a type, it only reads expr.type.
+//
+// Part 6: each Havoc function becomes a real C function. Prototypes for
+// every function are emitted before any body, so forward references and
+// mutual recursion just work — C itself only needs the declaration to
+// exist above the call site, not the definition. Recursion needs nothing
+// special: it's the native C call stack, not an emulated one.
 
 const INDENT = "    ";
 
@@ -19,6 +25,11 @@ function cType(type: Type): string {
     case "void":
       throw new Error("codegen: void cannot be a variable's type");
   }
+}
+
+// Unlike cType, "void" is a legal C return type — just not a legal variable type.
+function cReturnType(type: Type): string {
+  return type === "void" ? "void" : cType(type);
 }
 
 function zeroValue(type: Type): string {
@@ -36,13 +47,27 @@ function zeroValue(type: Type): string {
 
 class CodeGenerator {
   private forCounter = 0;
+  private functionNames = new Set<string>();
 
   generate(program: Program): string {
-    const declarations = this.emitDeclarations(program);
-    const body = this.emitStatements(program, INDENT);
+    const functionDefs = program.filter((item): item is FunctionDef => item.kind === "FunctionDef");
+    const topLevelStmts = program.filter((item): item is Stmt => item.kind !== "FunctionDef");
+    this.functionNames = new Set(functionDefs.map((fn) => fn.name));
+
+    const prototypes = functionDefs.map((fn) => `${this.emitSignature(fn)};\n`).join("");
+    const functionBodies = functionDefs.map((fn) => this.emitFunction(fn)).join("\n");
+
+    const declarations = this.emitDeclarations(topLevelStmts);
+    const body = this.emitStatements(topLevelStmts, INDENT);
+
     return (
       RUNTIME_PRELUDE +
-      "\nint main(void) {\n" +
+      "\n" +
+      prototypes +
+      (prototypes ? "\n" : "") +
+      functionBodies +
+      (functionBodies ? "\n" : "") +
+      "int main(void) {\n" +
       `${INDENT}havoc_arena_init();\n\n` +
       declarations +
       "\n" +
@@ -52,14 +77,45 @@ class CodeGenerator {
     );
   }
 
-  // Every variable is declared once at the top of main(); every later
-  // reference is a plain C assignment. Types come straight from the typed
-  // AST Part 3 produced — one flat scope, so one declaration per name.
-  private emitDeclarations(stmts: Stmt[]): string {
+  private emitSignature(fn: FunctionDef): string {
+    const params = fn.params.map((p) => `${cType(p.type)} h_${p.name}`).join(", ");
+    return `${cReturnType(fn.returnType)} hfn_${fn.name}(${params || "void"})`;
+  }
+
+  private emitFunction(fn: FunctionDef): string {
+    // Params are already declared as C function arguments — exclude them
+    // from the local-variable declaration pass so they aren't redeclared.
+    const paramNames = new Set(fn.params.map((p) => p.name));
+    const declarations = this.emitDeclarations(fn.body, paramNames);
+    const body = this.emitStatements(fn.body, INDENT);
+    // No "all paths return" analysis (real control-flow work, deferred, same
+    // as Part 5's definite-assignment gap): a non-void function that falls
+    // off the end without an explicit `return` gets a default zero-value
+    // return appended, so that's a defined-but-possibly-wrong value, never
+    // undefined behavior in the caller.
+    const trailingReturn = fn.returnType === "void" ? "" : `${INDENT}return ${zeroValue(fn.returnType)};\n`;
+    return (
+      `${this.emitSignature(fn)} {\n` +
+      declarations +
+      (declarations ? "\n" : "") +
+      body +
+      trailingReturn +
+      "}\n"
+    );
+  }
+
+  // Every variable is declared once at the top of its enclosing main()/
+  // function; every later reference is a plain C assignment. Types come
+  // straight from the typed AST Part 3 produced — one flat scope per
+  // function (or the top level), so one declaration per name.
+  private emitDeclarations(stmts: Stmt[], exclude: Set<string> = new Set()): string {
     const vars = new Map<string, Type>();
     this.collectDeclarations(stmts, vars);
     let out = "";
     for (const [name, type] of vars) {
+      if (exclude.has(name)) {
+        continue;
+      }
       // Zero-initialized: the type-checker doesn't yet do definite-assignment
       // analysis (a variable set in only one `if`/`else` branch, or inside a
       // loop that might run zero times, still type-checks). Zero-init turns
@@ -93,6 +149,8 @@ class CodeGenerator {
             this.collectDeclarations(stmt.elseBody, vars);
           }
           break;
+        case "Return":
+        case "IndexAssign":
         case "ExprStmt":
           break;
       }
@@ -107,6 +165,12 @@ class CodeGenerator {
     switch (stmt.kind) {
       case "Assign":
         return `${indent}h_${stmt.name} = ${this.emitExpr(stmt.value)};\n`;
+
+      case "IndexAssign":
+        return (
+          `${indent}*havoc_index_ptr(${this.emitExpr(stmt.array)}, ${this.emitExpr(stmt.index)}) = ` +
+          `${this.emitExpr(stmt.value)};\n`
+        );
 
       case "If": {
         let out =
@@ -144,6 +208,11 @@ class CodeGenerator {
         );
       }
 
+      case "Return":
+        return stmt.value === undefined
+          ? `${indent}return;\n`
+          : `${indent}return ${this.emitExpr(stmt.value)};\n`;
+
       case "ExprStmt":
         return `${indent}${this.emitExpr(stmt.expr)};\n`;
     }
@@ -153,6 +222,9 @@ class CodeGenerator {
     switch (expr.kind) {
       case "NumberLiteral":
         return `${expr.value}LL`;
+
+      case "BoolLiteral":
+        return expr.value ? "true" : "false";
 
       case "Identifier":
         return `h_${expr.name}`;
@@ -178,9 +250,12 @@ class CodeGenerator {
           case "print":
             return `havoc_print_int(${this.emitExpr(expr.args[0])})`;
           default:
-            // Unreachable post-typecheck: BUILTINS in typecheck.ts is the
-            // single source of truth for valid callees.
-            throw new Error(`codegen: unhandled builtin '${expr.callee}'`);
+            if (this.functionNames.has(expr.callee)) {
+              return `hfn_${expr.callee}(${expr.args.map((arg) => this.emitExpr(arg)).join(", ")})`;
+            }
+            // Unreachable post-typecheck: BUILTINS + the user function table
+            // in typecheck.ts are the single source of truth for valid callees.
+            throw new Error(`codegen: unhandled callee '${expr.callee}'`);
         }
     }
   }

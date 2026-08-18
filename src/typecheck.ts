@@ -1,16 +1,23 @@
-import { Expr, Program, Stmt, Type } from "./ast";
+import { Expr, FunctionDef, Program, Stmt, Type } from "./ast";
 
 // Part 3 scope: one flat variable scope for the whole program (if/for don't
 // introduce their own scope, since there are no functions yet to isolate
 // from), a single top-to-bottom pass with no forward references, and a
 // fixed built-in signature table kept separate from user variables.
+//
+// Part 6 adds user functions on top of that unchanged: each function body
+// gets its own fresh scope (params only — no implicit read or write access
+// to globals, so there's no C/Python-style "does this assign shadow or
+// mutate?" question to answer), and a signature pre-pass runs before any
+// body is checked so functions can call each other regardless of
+// definition order, including mutual recursion.
 
-interface BuiltinSignature {
+interface Signature {
   params: Type[];
   returns: Type;
 }
 
-const BUILTINS: Record<string, BuiltinSignature> = {
+const BUILTINS: Record<string, Signature> = {
   read_int: { params: [], returns: "int" },
   read_ints: { params: ["int"], returns: "int[]" },
   print: { params: ["int"], returns: "void" },
@@ -22,12 +29,50 @@ export class TypeCheckError extends Error {}
 
 class TypeChecker {
   private vars = new Map<string, Type>();
+  private functions = new Map<string, Signature>();
+  private currentReturnType: Type | null = null;
 
   check(program: Program): Program {
-    for (const stmt of program) {
+    const functionDefs = program.filter((item): item is FunctionDef => item.kind === "FunctionDef");
+    const topLevelStmts = program.filter((item): item is Stmt => item.kind !== "FunctionDef");
+
+    for (const fn of functionDefs) {
+      if (BUILTINS[fn.name] !== undefined) {
+        throw new TypeCheckError(`cannot redefine built-in '${fn.name}' at line ${fn.line}`);
+      }
+      if (this.functions.has(fn.name)) {
+        throw new TypeCheckError(`function '${fn.name}' is already defined at line ${fn.line}`);
+      }
+      this.functions.set(fn.name, { params: fn.params.map((p) => p.type), returns: fn.returnType });
+    }
+
+    for (const fn of functionDefs) {
+      this.checkFunctionBody(fn);
+    }
+
+    for (const stmt of topLevelStmts) {
       this.checkStmt(stmt);
     }
+
     return program;
+  }
+
+  private checkFunctionBody(fn: FunctionDef): void {
+    const outerVars = this.vars;
+    const outerReturnType = this.currentReturnType;
+
+    this.vars = new Map();
+    for (const param of fn.params) {
+      this.vars.set(param.name, param.type);
+    }
+    this.currentReturnType = fn.returnType;
+
+    for (const stmt of fn.body) {
+      this.checkStmt(stmt);
+    }
+
+    this.vars = outerVars;
+    this.currentReturnType = outerReturnType;
   }
 
   private checkStmt(stmt: Stmt): void {
@@ -71,6 +116,44 @@ class TypeChecker {
         for (const inner of stmt.body) this.checkStmt(inner);
         return;
       }
+      case "IndexAssign": {
+        const arrayType = this.checkExpr(stmt.array);
+        const indexType = this.checkExpr(stmt.index);
+        const valueType = this.checkExpr(stmt.value);
+        if (arrayType !== "int[]") {
+          throw new TypeCheckError(`cannot index a value of type ${arrayType} at line ${stmt.line}`);
+        }
+        if (indexType !== "int") {
+          throw new TypeCheckError(`array index must be int, got ${indexType} at line ${stmt.line}`);
+        }
+        if (valueType !== "int") {
+          throw new TypeCheckError(`cannot assign ${valueType} into an int[] at line ${stmt.line}`);
+        }
+        return;
+      }
+      case "Return": {
+        if (this.currentReturnType === null) {
+          throw new TypeCheckError(`'return' outside a function at line ${stmt.line}`);
+        }
+        if (stmt.value === undefined) {
+          if (this.currentReturnType !== "void") {
+            throw new TypeCheckError(
+              `function must return ${this.currentReturnType}, got no value at line ${stmt.line}`
+            );
+          }
+          return;
+        }
+        const valueType = this.checkExpr(stmt.value);
+        if (this.currentReturnType === "void") {
+          throw new TypeCheckError(`cannot return a value from a void function at line ${stmt.line}`);
+        }
+        if (valueType !== this.currentReturnType) {
+          throw new TypeCheckError(
+            `function must return ${this.currentReturnType}, got ${valueType} at line ${stmt.line}`
+          );
+        }
+        return;
+      }
       case "ExprStmt": {
         this.checkExpr(stmt.expr);
         return;
@@ -98,6 +181,10 @@ class TypeChecker {
     switch (expr.kind) {
       case "NumberLiteral":
         expr.type = "int";
+        return expr.type;
+
+      case "BoolLiteral":
+        expr.type = "bool";
         return expr.type;
 
       case "Identifier": {
@@ -146,7 +233,7 @@ class TypeChecker {
       }
 
       case "CallExpr": {
-        const signature = BUILTINS[expr.callee];
+        const signature = BUILTINS[expr.callee] ?? this.functions.get(expr.callee);
         if (signature === undefined) {
           throw new TypeCheckError(`unknown function '${expr.callee}' at line ${expr.line}`);
         }

@@ -1,5 +1,5 @@
 import { Token, TokenType } from "./lexer";
-import { Expr, Program, Stmt } from "./ast";
+import { Expr, FunctionDef, Item, Param, Program, Stmt, Type } from "./ast";
 
 const COMPARISON_OPS: TokenType[] = ["EQ", "NEQ", "LT", "LTE", "GT", "GTE"];
 const ADDITIVE_OPS: TokenType[] = ["PLUS", "MINUS"];
@@ -50,9 +50,61 @@ class Parser {
   }
 
   parseProgram(): Program {
-    const stmts = this.parseStatementList("EOF");
+    // Top-level only: this is deliberately separate from parseStatementList
+    // (used for blocks) so `func` can never appear nested inside an if/for/
+    // while/function body — function definitions only exist at the top level.
+    const items: Item[] = [];
+    this.skipNewlines();
+    while (!this.check("EOF")) {
+      items.push(this.check("FUNC") ? this.parseFunctionDef() : this.parseStatement());
+      if (this.check("EOF")) {
+        break;
+      }
+      this.expect("NEWLINE", "Expected newline after statement");
+      this.skipNewlines();
+    }
     this.expect("EOF", "Expected end of file");
-    return stmts;
+    return items;
+  }
+
+  private parseFunctionDef(): FunctionDef {
+    const line = this.expect("FUNC", "Expected 'func'").line;
+    const name = this.expect("IDENTIFIER", "Expected function name").value;
+    this.expect("LPAREN", "Expected '('");
+    const params: Param[] = [];
+    if (!this.check("RPAREN")) {
+      params.push(this.parseParam());
+      while (this.match("COMMA")) {
+        params.push(this.parseParam());
+      }
+    }
+    this.expect("RPAREN", "Expected ')'");
+    const returnType: Type = this.match("ARROW") ? this.parseType() : "void";
+    const body = this.parseBlock();
+    return { kind: "FunctionDef", name, params, returnType, body, line };
+  }
+
+  private parseParam(): Param {
+    const name = this.expect("IDENTIFIER", "Expected parameter name").value;
+    this.expect("COLON", "Expected ':'");
+    const type = this.parseType();
+    return { name, type };
+  }
+
+  private parseType(): Type {
+    if (this.match("LBRACKET")) {
+      const inner = this.expect("IDENTIFIER", "Expected element type");
+      this.expect("RBRACKET", "Expected ']'");
+      if (inner.value !== "int") {
+        throw new Error(`Unknown array element type '${inner.value}' at line ${inner.line}`);
+      }
+      return "int[]";
+    }
+    const name = this.expect("IDENTIFIER", "Expected type name");
+    if (name.value === "int" || name.value === "bool") {
+      return name.value;
+    }
+    throw new Error(`Unknown type '${name.value}' at line ${name.line}`);
   }
 
   private parseStatementList(terminator: TokenType): Stmt[] {
@@ -86,11 +138,35 @@ class Parser {
     if (this.check("FOR")) {
       return this.parseFor();
     }
-    if (this.check("IDENTIFIER") && this.peek(1).type === "ASSIGN") {
-      return this.parseAssign();
+    if (this.check("RETURN")) {
+      return this.parseReturn();
     }
+
+    // Parse a full expression first, then check for a trailing '=' — this
+    // handles both `name = value` and `arr[i] = value` through the same
+    // path, since parsePostfix already produces Identifier or IndexExpr
+    // nodes for either. No separate lookahead special-case needed.
     const line = this.peek().line;
-    return { kind: "ExprStmt", expr: this.parseExpr(), line };
+    const expr = this.parseExpr();
+    if (!this.match("ASSIGN")) {
+      return { kind: "ExprStmt", expr, line };
+    }
+    const value = this.parseExpr();
+    if (expr.kind === "Identifier") {
+      return { kind: "Assign", name: expr.name, value, line };
+    }
+    if (expr.kind === "IndexExpr") {
+      return { kind: "IndexAssign", array: expr.array, index: expr.index, value, line };
+    }
+    throw new Error(`Invalid assignment target at line ${line}`);
+  }
+
+  private parseReturn(): Stmt {
+    const line = this.expect("RETURN", "Expected 'return'").line;
+    if (this.check("NEWLINE") || this.check("RBRACE") || this.check("EOF")) {
+      return { kind: "Return", line };
+    }
+    return { kind: "Return", value: this.parseExpr(), line };
   }
 
   private parseIf(): Stmt {
@@ -120,13 +196,6 @@ class Parser {
     const iterable = this.parseExpr();
     const body = this.parseBlock();
     return { kind: "For", varName, iterable, body, line };
-  }
-
-  private parseAssign(): Stmt {
-    const nameToken = this.expect("IDENTIFIER", "Expected identifier");
-    this.expect("ASSIGN", "Expected '='");
-    const value = this.parseExpr();
-    return { kind: "Assign", name: nameToken.value, value, line: nameToken.line };
   }
 
   private parseExpr(): Expr {
@@ -190,12 +259,23 @@ class Parser {
       return { kind: "NumberLiteral", value: Number(token.value), line: token.line };
     }
 
+    if (this.match("TRUE")) {
+      return { kind: "BoolLiteral", value: true, line: token.line };
+    }
+
+    if (this.match("FALSE")) {
+      return { kind: "BoolLiteral", value: false, line: token.line };
+    }
+
     if (this.match("IDENTIFIER")) {
       if (this.check("LPAREN")) {
         this.advance();
         const args: Expr[] = [];
         if (!this.check("RPAREN")) {
           args.push(this.parseExpr());
+          while (this.match("COMMA")) {
+            args.push(this.parseExpr());
+          }
         }
         this.expect("RPAREN", "Expected ')'");
         return { kind: "CallExpr", callee: token.value, args, line: token.line };
