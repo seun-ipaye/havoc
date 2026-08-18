@@ -1,14 +1,16 @@
+export type Type = "int" | "bool" | "int[]" | "void";
+
 export type Expr =
-  | { kind: "NumberLiteral"; value: number }
-  | { kind: "Identifier"; name: string }
-  | { kind: "BinaryExpr"; op: string; left: Expr; right: Expr }
-  | { kind: "IndexExpr"; array: Expr; index: Expr }
-  | { kind: "CallExpr"; callee: string; args: Expr[] };
+  | { kind: "NumberLiteral"; value: number; line: number; type?: Type }
+  | { kind: "Identifier"; name: string; line: number; type?: Type }
+  | { kind: "BinaryExpr"; op: string; left: Expr; right: Expr; line: number; type?: Type }
+  | { kind: "IndexExpr"; array: Expr; index: Expr; line: number; type?: Type }
+  | { kind: "CallExpr"; callee: string; args: Expr[]; line: number; type?: Type };
 
 export type Stmt =
-  | { kind: "Assign"; name: string; value: Expr }
-  | { kind: "If"; condition: Expr; body: Stmt[] }
-  | { kind: "For"; varName: string; iterable: Expr; body: Stmt[] }
-  | { kind: "ExprStmt"; expr: Expr };
+  | { kind: "Assign"; name: string; value: Expr; line: number }
+  | { kind: "If"; condition: Expr; body: Stmt[]; line: number }
+  | { kind: "For"; varName: string; iterable: Expr; body: Stmt[]; line: number }
+  | { kind: "ExprStmt"; expr: Expr; line: number };
 
 export type Program = Stmt[];

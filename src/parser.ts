@@ -86,30 +86,31 @@ class Parser {
     if (this.check("IDENTIFIER") && this.peek(1).type === "ASSIGN") {
       return this.parseAssign();
     }
-    return { kind: "ExprStmt", expr: this.parseExpr() };
+    const line = this.peek().line;
+    return { kind: "ExprStmt", expr: this.parseExpr(), line };
   }
 
   private parseIf(): Stmt {
-    this.expect("IF", "Expected 'if'");
+    const line = this.expect("IF", "Expected 'if'").line;
     const condition = this.parseExpr();
     const body = this.parseBlock();
-    return { kind: "If", condition, body };
+    return { kind: "If", condition, body, line };
   }
 
   private parseFor(): Stmt {
-    this.expect("FOR", "Expected 'for'");
+    const line = this.expect("FOR", "Expected 'for'").line;
     const varName = this.expect("IDENTIFIER", "Expected loop variable name").value;
     this.expect("IN", "Expected 'in'");
     const iterable = this.parseExpr();
     const body = this.parseBlock();
-    return { kind: "For", varName, iterable, body };
+    return { kind: "For", varName, iterable, body, line };
   }
 
   private parseAssign(): Stmt {
-    const name = this.expect("IDENTIFIER", "Expected identifier").value;
+    const nameToken = this.expect("IDENTIFIER", "Expected identifier");
     this.expect("ASSIGN", "Expected '='");
     const value = this.parseExpr();
-    return { kind: "Assign", name, value };
+    return { kind: "Assign", name: nameToken.value, value, line: nameToken.line };
   }
 
   private parseExpr(): Expr {
@@ -119,9 +120,9 @@ class Parser {
   private parseComparison(): Expr {
     let left = this.parseAdditive();
     while (COMPARISON_OPS.includes(this.peek().type)) {
-      const op = this.advance().value;
+      const opToken = this.advance();
       const right = this.parseAdditive();
-      left = { kind: "BinaryExpr", op, left, right };
+      left = { kind: "BinaryExpr", op: opToken.value, left, right, line: opToken.line };
     }
     return left;
   }
@@ -129,9 +130,9 @@ class Parser {
   private parseAdditive(): Expr {
     let left = this.parseMultiplicative();
     while (ADDITIVE_OPS.includes(this.peek().type)) {
-      const op = this.advance().value;
+      const opToken = this.advance();
       const right = this.parseMultiplicative();
-      left = { kind: "BinaryExpr", op, left, right };
+      left = { kind: "BinaryExpr", op: opToken.value, left, right, line: opToken.line };
     }
     return left;
   }
@@ -139,9 +140,9 @@ class Parser {
   private parseMultiplicative(): Expr {
     let left = this.parsePostfix();
     while (MULTIPLICATIVE_OPS.includes(this.peek().type)) {
-      const op = this.advance().value;
+      const opToken = this.advance();
       const right = this.parsePostfix();
-      left = { kind: "BinaryExpr", op, left, right };
+      left = { kind: "BinaryExpr", op: opToken.value, left, right, line: opToken.line };
     }
     return left;
   }
@@ -149,10 +150,10 @@ class Parser {
   private parsePostfix(): Expr {
     let expr = this.parsePrimary();
     while (this.check("LBRACKET")) {
-      this.advance();
+      const bracket = this.advance();
       const index = this.parseExpr();
       this.expect("RBRACKET", "Expected ']'");
-      expr = { kind: "IndexExpr", array: expr, index };
+      expr = { kind: "IndexExpr", array: expr, index, line: bracket.line };
     }
     return expr;
   }
@@ -161,7 +162,7 @@ class Parser {
     const token = this.peek();
 
     if (this.match("NUMBER")) {
-      return { kind: "NumberLiteral", value: Number(token.value) };
+      return { kind: "NumberLiteral", value: Number(token.value), line: token.line };
     }
 
     if (this.match("IDENTIFIER")) {
@@ -172,9 +173,9 @@ class Parser {
           args.push(this.parseExpr());
         }
         this.expect("RPAREN", "Expected ')'");
-        return { kind: "CallExpr", callee: token.value, args };
+        return { kind: "CallExpr", callee: token.value, args, line: token.line };
       }
-      return { kind: "Identifier", name: token.value };
+      return { kind: "Identifier", name: token.value, line: token.line };
     }
 
     if (this.match("LPAREN")) {
