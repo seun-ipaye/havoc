@@ -1,1 +1,9 @@
 node_modules/
+
+# Compiled binaries, generated C, and generated test input — reproducible
+# via `compile.ts` / `generate_input.py`, not worth tracking.
+benchmarks/**/*.c
+benchmarks/**/input.txt
+benchmarks/islands/islands
+benchmarks/islands/tiny.txt
+

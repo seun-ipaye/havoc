@@ -1,0 +1,78 @@
+// Number of islands: count 4-directionally connected regions of 1s in an
+// n x n grid, via BFS with a manual array-based queue (no recursion, so
+// the comparison isn't confounded by Python's default recursion limit).
+//
+// Input: n, then n*n ints (0 or 1) — the grid, row-major.
+// Output: the number of islands.
+
+func count_islands(grid: [int], n: int) -> int {
+    visited = make_array(n * n)
+    queue = make_array(n * n)
+    count = 0
+    i = 0
+    while i < n * n {
+        if grid[i] == 1 {
+            if visited[i] == 0 {
+                count = count + 1
+                head = 0
+                tail = 0
+                queue[tail] = i
+                tail = tail + 1
+                visited[i] = 1
+                while head < tail {
+                    cur = queue[head]
+                    head = head + 1
+                    row = cur / n
+                    col = cur % n
+
+                    if row > 0 {
+                        up = cur - n
+                        if grid[up] == 1 {
+                            if visited[up] == 0 {
+                                visited[up] = 1
+                                queue[tail] = up
+                                tail = tail + 1
+                            }
+                        }
+                    }
+                    if row < n - 1 {
+                        down = cur + n
+                        if grid[down] == 1 {
+                            if visited[down] == 0 {
+                                visited[down] = 1
+                                queue[tail] = down
+                                tail = tail + 1
+                            }
+                        }
+                    }
+                    if col > 0 {
+                        left = cur - 1
+                        if grid[left] == 1 {
+                            if visited[left] == 0 {
+                                visited[left] = 1
+                                queue[tail] = left
+                                tail = tail + 1
+                            }
+                        }
+                    }
+                    if col < n - 1 {
+                        right = cur + 1
+                        if grid[right] == 1 {
+                            if visited[right] == 0 {
+                                visited[right] = 1
+                                queue[tail] = right
+                                tail = tail + 1
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        i = i + 1
+    }
+    return count
+}
+
+n = read_int()
+grid = read_ints(n * n)
+print(count_islands(grid, n))

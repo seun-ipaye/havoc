@@ -20,6 +20,7 @@ interface Signature {
 const BUILTINS: Record<string, Signature> = {
   read_int: { params: [], returns: "int" },
   read_ints: { params: ["int"], returns: "int[]" },
+  make_array: { params: ["int"], returns: "int[]" },
   print: { params: ["int"], returns: "void" },
 };
 

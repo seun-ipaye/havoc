@@ -88,6 +88,20 @@ static HavocIntArray havoc_read_ints(int64_t n) {
     return arr;
 }
 
+// Allocates scratch storage that isn't part of the program's input —
+// a visited array, a manual queue, a DP table. Zero-initialized, arena
+// backed, never freed, same as everything else.
+static HavocIntArray havoc_make_array(int64_t n) {
+    int64_t* data = (int64_t*)havoc_alloc(sizeof(int64_t) * (size_t)n);
+    for (int64_t i = 0; i < n; i++) {
+        data[i] = 0;
+    }
+    HavocIntArray arr;
+    arr.data = data;
+    arr.length = n;
+    return arr;
+}
+
 static void havoc_print_int(int64_t x) {
     printf("%lld\\n", (long long)x);
 }

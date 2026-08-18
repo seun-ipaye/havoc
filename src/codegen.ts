@@ -247,6 +247,8 @@ class CodeGenerator {
             return "havoc_read_int()";
           case "read_ints":
             return `havoc_read_ints(${this.emitExpr(expr.args[0])})`;
+          case "make_array":
+            return `havoc_make_array(${this.emitExpr(expr.args[0])})`;
           case "print":
             return `havoc_print_int(${this.emitExpr(expr.args[0])})`;
           default:
