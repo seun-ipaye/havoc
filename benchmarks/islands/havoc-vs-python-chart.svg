@@ -1,0 +1,83 @@
+<svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg" font-family="Inter, system-ui, -apple-system, sans-serif">
+  <defs>
+    <style>
+      .grid { stroke: rgba(255,255,255,0.10); stroke-width: 1; }
+      .axis { stroke: rgba(255,255,255,0.35); stroke-width: 1; }
+      .tick { fill: #898781; font-size: 15px; font-variant-numeric: tabular-nums; }
+      .axis-label { fill: #c3c2b7; font-size: 14px; letter-spacing: 0.02em; }
+      .title { fill: #ffffff; font-size: 22px; font-weight: 700; }
+      .subtitle { fill: #898781; font-size: 14.5px; }
+      .havoc-line { fill: none; stroke: #00a868; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+      .python-line { fill: none; stroke: #3987e5; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+      .havoc-dot { fill: #00a868; stroke: #000; stroke-width: 2; }
+      .python-dot { fill: #3987e5; stroke: #000; stroke-width: 2; }
+      .direct-label { font-size: 15px; font-weight: 600; }
+      .legend-text { fill: #e8e7e2; font-size: 14.5px; }
+      .callout { fill: #00ff9f; font-size: 15px; font-weight: 700; }
+    </style>
+  </defs>
+
+  <!-- title -->
+  <text x="70" y="34" class="title">Havoc vs. Python — counting islands (BFS)</text>
+  <text x="70" y="55" class="subtitle">4M to 100M cells, same grid, same algorithm, same answer every time</text>
+
+  <!-- legend -->
+  <g transform="translate(600,20)">
+    <line x1="0" y1="0" x2="22" y2="0" class="havoc-line" />
+    <circle cx="11" cy="0" r="4" class="havoc-dot" />
+    <text x="30" y="4.5" class="legend-text">Havoc (compiled)</text>
+    <line x1="150" y1="0" x2="172" y2="0" class="python-line" />
+    <circle cx="161" cy="0" r="4" class="python-dot" />
+    <text x="180" y="4.5" class="legend-text">Python</text>
+  </g>
+
+  <!-- gridlines + y ticks -->
+  <g>
+    <line x1="70" y1="470" x2="860" y2="470" class="grid" />
+    <text x="55" y="474.5" class="tick" text-anchor="end">0s</text>
+
+    <line x1="70" y1="374.8" x2="860" y2="374.8" class="grid" />
+    <text x="55" y="379.3" class="tick" text-anchor="end">10s</text>
+
+    <line x1="70" y1="279.5" x2="860" y2="279.5" class="grid" />
+    <text x="55" y="284" class="tick" text-anchor="end">20s</text>
+
+    <line x1="70" y1="184.3" x2="860" y2="184.3" class="grid" />
+    <text x="55" y="188.8" class="tick" text-anchor="end">30s</text>
+
+    <line x1="70" y1="89.1" x2="860" y2="89.1" class="grid" />
+    <text x="55" y="93.6" class="tick" text-anchor="end">40s</text>
+  </g>
+
+  <!-- x axis -->
+  <line x1="70" y1="470" x2="860" y2="470" class="axis" />
+  <g class="tick" text-anchor="middle">
+    <text x="70" y="495">2000</text>
+    <text x="267.5" y="495">4000</text>
+    <text x="465" y="495">6000</text>
+    <text x="662.5" y="495">8000</text>
+    <text x="860" y="495">10000</text>
+  </g>
+  <text x="465" y="522" class="axis-label" text-anchor="middle">grid size (N × N)</text>
+
+  <!-- python line -->
+  <polyline points="70,457.7 267.5,418.3 465,356.1 662.5,245.8 860,90.9" class="python-line" />
+  <circle cx="70" cy="457.7" r="4.5" class="python-dot" />
+  <circle cx="267.5" cy="418.3" r="4.5" class="python-dot" />
+  <circle cx="465" cy="356.1" r="4.5" class="python-dot" />
+  <circle cx="662.5" cy="245.8" r="4.5" class="python-dot" />
+  <circle cx="860" cy="90.9" r="4.5" class="python-dot" />
+  <text x="800" y="75" class="direct-label" fill="#5fa3ec" text-anchor="end">39.8s</text>
+
+  <!-- havoc line -->
+  <polyline points="70,468.1 267.5,462.6 465,452.7 662.5,438.9 860,409.6" class="havoc-line" />
+  <circle cx="70" cy="468.1" r="4.5" class="havoc-dot" />
+  <circle cx="267.5" cy="462.6" r="4.5" class="havoc-dot" />
+  <circle cx="465" cy="452.7" r="4.5" class="havoc-dot" />
+  <circle cx="662.5" cy="438.9" r="4.5" class="havoc-dot" />
+  <circle cx="860" cy="409.6" r="4.5" class="havoc-dot" />
+  <text x="800" y="400" class="direct-label" fill="#1ec98a" text-anchor="end">6.3s</text>
+
+  <!-- callout -->
+  <text x="465" y="548" class="callout" text-anchor="middle">~6.7x faster, consistently, from 4M to 100M cells</text>
+</svg>

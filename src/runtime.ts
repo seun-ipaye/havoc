@@ -11,7 +11,9 @@ export const RUNTIME_PRELUDE = `#include <stdio.h>
 // Programs are single-shot: allocate from a bump arena and never free.
 // No GC, no manual frees, no use-after-free — the OS reclaims everything
 // when the process exits.
-static const size_t HAVOC_ARENA_SIZE = 256 * 1024 * 1024;
+// Cast first: 8 * 1024 * 1024 * 1024 computed as plain (32-bit) int
+// literals overflows before it ever reaches size_t.
+static const size_t HAVOC_ARENA_SIZE = (size_t)8 * 1024 * 1024 * 1024;
 static unsigned char* havoc_arena;
 static size_t havoc_arena_used = 0;
 
